@@ -41,16 +41,16 @@ public class Example {
 
         out.println("ADD 0 1 0");
         System.out.println("return code: "+in.readLine());
-        pressEnter();
         out.println("ADD 1 1 1");
         System.out.println("return code: "+in.readLine());
         pressEnter();
         out.println("ADD 2 1 0");
         System.out.println("return code: "+in.readLine());
+        out.println("ADD 1 1 1");
+        System.out.println("return code: "+in.readLine());
         pressEnter();
         out.println("ADD 3 1 0");
         System.out.println("return code: "+in.readLine());
-        pressEnter();
         socket.close();
 	}
 	
