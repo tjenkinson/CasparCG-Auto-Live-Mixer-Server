@@ -5,17 +5,33 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
 import tjenkinson.caspar_serverconnection.CaspSocket;
 
 
-public class Program {
+public class Server {
 	
 	private CaspSocket caspSocket = null;
 	
-	private String caspAddress = "localhost";
-	private int caspPort = 5250;
-	private int caspChan = 1;
-	private int[] caspLayers = {5, 6, 7, 8};
+	private String caspAddress = null;
+	private int caspPort = -1;
+	private int caspChan = -1;
+	private int serverPort = -1;
+	private ServerSocketManager serverSocketManager = null;
+	private int[] caspLayers = {-1, -1, -1, -1};
 	private LayerGroup[] layerGroups = new LayerGroup[2];
 	private int liveLayerGroup = 1;
 	private Section queuedLayerSection = null;
@@ -29,44 +45,121 @@ public class Program {
 	ArrayList<Action> actionQueue = new ArrayList<Action>();
 	Action currentAction = null;
 	
-	public Program() throws IOException {
-				
+	public Server(String caspAddress, int caspPort, int caspChan, int caspLayer1, int caspLayer2, int caspLayer3, int caspLayer4, int serverPort, String sectionsXmlFilePath) throws IOException {
+
+		this.caspAddress = caspAddress;
+		this.caspPort = caspPort;
+		this.caspChan = caspChan;
+		this.caspLayers[0] = caspLayer1;
+		this.caspLayers[1] = caspLayer2;
+		this.caspLayers[2] = caspLayer3;
+		this.caspLayers[3] = caspLayer4;
+		this.serverPort = serverPort;
+		
+		
+		loadSections(sectionsXmlFilePath);
+		
 		initSocket();
 		
 		initLayerGroups();
-
-		// load in sections
-		Section section1 = new Section("opening", 0, 4950, 0, 4950);
-		sections.add(section1);
-		
-		Section section2 = new Section("part1", 0, 9905, 0, 9910);
-		section2.addBreakPoint(0);
-		section2.addBreakPoint(4969);
-		section2.addBreakPoint(9910);
-		sections.add(section2);
-		
-		Section section3 = new Section("part2", 0, 4916, 0, 4916);
-		sections.add(section3);
-		
-		Section section4 = new Section("ending", 0, 5929, 0, 5929);
-		sections.add(section4);
 		
 		Timer timer = new Timer(false);
 		timer.schedule(new Ticker(), 0, tickerTime);
 		
-		addAction(new Action(sections.get(0), 1, false));
-		addAction(new Action(sections.get(1), 0, true));
-
-		addAction(new Action(sections.get(2), 1, false));
-		addAction(new Action(sections.get(1), 0, true));
-		addAction(new Action(sections.get(2), 1, false));
-		addAction(new Action(sections.get(1), 0, true));
-		addAction(new Action(sections.get(3), 1, false));
-		
-		// actions would be queued dynamically
+		// start server to listen to action requests
+		initServerSocket();
 	}
 	
-	public void initSocket() {
+	public Action createAction(int sectionNo, int plays, boolean keepPlaying) {
+		
+		Action action = null;
+		// validate and create
+		if (sectionNo < sections.size() && plays >= 0 && (plays != 0 || keepPlaying)) {
+			action = new Action(sections.get(sectionNo), plays, keepPlaying);
+		}
+		return action;
+	}
+	
+	private void loadSections(String sectionsXmlFilePath) throws IOException {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();  
+	    DocumentBuilder builder=null; 
+	    Document document = null;
+
+        try {
+			builder = factory.newDocumentBuilder();
+		} catch (ParserConfigurationException e1) {
+			e1.printStackTrace();
+		}  
+        try {
+			document = builder.parse(new InputSource(sectionsXmlFilePath));
+		} catch (SAXException e) {
+			e.printStackTrace();
+		}
+
+        XPathExpression expr = null;
+        Object hits = null;
+		try {
+			expr = XPathFactory.newInstance().newXPath().compile("/sections/section");
+			hits = expr.evaluate(document, XPathConstants.NODESET);
+		} catch (XPathExpressionException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		if (hits instanceof NodeList) {
+			NodeList list = (NodeList) hits;
+			// loop through each <section>
+			for (int i=0; i<list.getLength(); i++) {
+				Element node = (Element) list.item(i);
+				String file = node.getElementsByTagName("file").item(0).getTextContent();
+				int start = Integer.parseInt(node.getElementsByTagName("start").item(0).getTextContent(), 10);
+				int duration = Integer.parseInt(node.getElementsByTagName("duration").item(0).getTextContent(), 10);
+				int inOffset = Integer.parseInt(node.getElementsByTagName("inOffset").item(0).getTextContent(), 10);
+				int outOffset = Integer.parseInt(node.getElementsByTagName("outOffset").item(0).getTextContent(), 10);
+				
+				// validate
+				if (	start < 0 ||
+						duration <= 0 ||
+						inOffset < 0 || inOffset >= duration ||
+						outOffset < 0 || outOffset > duration) {
+					// invalid
+					// TODO: do something better than exiting
+					System.exit(2);
+				}
+				
+				Section addedSection = new Section(file, start, duration, inOffset, outOffset);
+				sections.add(addedSection);
+				
+				boolean hasBreakpoint = false;
+				if (node.getElementsByTagName("breakpoints").getLength() == 1) {
+					Element breakpointsNode = (Element) node.getElementsByTagName("breakpoints").item(0);
+					for (int j=0; j<breakpointsNode.getElementsByTagName("offset").getLength(); j++) {
+						Element breakpoint = (Element) breakpointsNode.getElementsByTagName("offset").item(j);
+						int breakpointOffset = Integer.parseInt(breakpoint.getTextContent(), 10);
+						// check valid
+						if (breakpointOffset < 0 || breakpointOffset > duration) {
+							// invalid
+							// TODO: do something better than exiting
+
+							System.exit(2);
+						}
+						addedSection.addBreakPoint(breakpointOffset);
+						hasBreakpoint = true;
+					}	
+				}
+				// if none have been set set one at the end
+				if (!hasBreakpoint) {
+					addedSection.addBreakPoint(duration);
+				}
+			}
+		}
+	}
+	
+	private void initServerSocket() {
+		serverSocketManager = new ServerSocketManager(this, serverPort);
+	}
+	
+	private void initSocket() {
 		
 		try {
 			caspSocket = new CaspSocket(caspAddress, caspPort);
@@ -76,7 +169,7 @@ public class Program {
 		}
 	}
 	
-	public void initLayerGroups() {
+	private void initLayerGroups() {
 		layerGroups[0] = new LayerGroup(caspSocket, caspChan, caspLayers[0], caspLayers[1]);
 		layerGroups[1] = new LayerGroup(caspSocket, caspChan, caspLayers[2], caspLayers[3]);
 	}
@@ -94,6 +187,12 @@ public class Program {
 			}
 			// load into queued layer group if not loaded already
 			loadQueuedLayer();
+		}
+	}
+	
+	public void clearActions() {
+		synchronized (lock1) {
+			actionQueue.clear();
 		}
 	}
 	
