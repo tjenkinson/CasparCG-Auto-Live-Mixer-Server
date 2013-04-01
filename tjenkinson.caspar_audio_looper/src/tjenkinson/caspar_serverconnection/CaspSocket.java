@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.Date;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
@@ -18,16 +19,43 @@ public class CaspSocket {
 	private Socket socket = null;
 	private PrintWriter out = null;
 	private BufferedReader in = null;
+	private String caspAddress = null;
+	private int caspPort = -1;
+	private boolean connected = false;
 	
 	public CaspSocket(String caspAddress, int caspPort) throws IOException {
+		this.caspAddress = caspAddress;
+		this.caspPort = caspPort;
+		open(); // make connection
+	}
+	
+	private synchronized void open() throws UnknownHostException, IOException {
+		if (connected) {
+			return;
+		}
 		socket = new Socket(InetAddress.getByName(caspAddress), caspPort);
 		out = new PrintWriter(socket.getOutputStream(), true);
-		in = new BufferedReader(new InputStreamReader(socket.getInputStream()));	
+		in = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
+		connected = true;
+	}
+	
+	public synchronized void close() throws IOException {
+		if (!connected) {
+			return;
+		}
+		out.close();
+		in.close();
+		socket.close();
+		socket = null;
+		in = null;
+		out = null;
+		connected = false;
 	}
 	
 	
 	public synchronized CaspReturn runCmd(CaspCmd cmd) throws IOException {
-		out.println(cmd.getCmdString());
+		open(); // connect if not already
+		out.println(new String(cmd.getCmdString().getBytes("UTF-8"))); // send command through socket
 		long requestTime = new Date().getTime();
 		
 		String line = in.readLine();
@@ -47,7 +75,6 @@ public class CaspSocket {
 		else if (status == 201) { // one line of data returned
 			endSequence = Pattern.compile("\\r\\n$");
 			charsRemove = 2;
-			response = in.readLine();
 		}
 		else {
 			getResponse = false;
