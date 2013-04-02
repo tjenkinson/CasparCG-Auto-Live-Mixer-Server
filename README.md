@@ -12,7 +12,7 @@ Basically the Auto Live Mixer server receives commands from you and then sends t
 The command structure is:
 
 To queue another section which will start playing after the playing section reaches a break point:
-ADD [section no (starting from 0 in the same order as the xml):int] [minimum no of plays:int] [keep looping until recieve next command]:0|1]
+ADD [section no (starting from 0 in the same order as the xml):int] [minimum no of plays:int] [keep looping until recieve next command:0|1]
 
 To clear any sections in the queue:
 REMOVE
