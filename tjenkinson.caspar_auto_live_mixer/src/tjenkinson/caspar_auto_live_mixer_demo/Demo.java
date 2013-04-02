@@ -1,5 +1,5 @@
 /*
- * Run the casper server and then CasparLiveAutoMixerServer.jar with the correct paramaters first.
+ * Run the casper server and then CasparLiveAutoMixerServer.jar with the correct parameters first.
  * 
  * I have created a batch file as a guide.
  * 
