@@ -90,8 +90,9 @@ public class Demo {
 	}
 	
 	private static void pressEnter() throws IOException, InterruptedException {
-		System.out.println("Moving on at next breakpoint! Press enter to continue");
+		System.out.println("Press enter to continue");
 		BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
 		bufferRead.readLine();
+		System.out.println("Command sent: Moving on at next breakpoint!");
 	}
 }
