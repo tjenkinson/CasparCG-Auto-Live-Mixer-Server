@@ -1,5 +1,7 @@
 /*
- * Run the casper server and then CasparLiveAutoMixerServer.jar first.
+ * Run the casper server and then CasparLiveAutoMixerServer.jar with the correct paramaters first.
+ * 
+ * I have created a batch file as a guide.
  * 
  * The live auto mixer server requires the following parameters:
  * [caspar address] [caspar port] [caspar channel] [caspar layer 1] [caspar layer 2] [caspar layer 3] [caspar layer 4] [live auto mixer port][audio structure xml file path]
