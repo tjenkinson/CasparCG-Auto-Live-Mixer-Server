@@ -118,7 +118,6 @@ public class AudioTimer {
 				this.timeOverride = passedTimeOverride;
 			}
 			
-			//TODO: un hard code channel and layer
 			int currentFrame = -1;
 			CaspReturn response = caspSocket.runCmd(new Info(caspChannel+"-"+caspLayer+" F"));
 			
